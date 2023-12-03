@@ -15,13 +15,36 @@ except:
 this_host = socket.gethostname()
 this_ip_addr = socket.gethostbyname(this_host)
 
-def start(static_forwarding_lookup, queue_size, log):
-    socket_obj.setblocking(False)
-    queue = [[],[],[]]
+def readtopology():
+    return 0
 
-    last_send_time = 0
+def createroutes():
+    return 0
+
+def forwardpacket():
+    return 0
+
+def buildForwardTable():
+    return 0
+
+def main():
+    parser = argparse.ArgumentParser(description="gets emulator data")
+
+    parser.add_argument('-p', metavar='port')
+    parser.add_argument('-f', metavar='filename')
+
+    args = parser.parse_args()
+
+    try:
+        socket_obj.bind((this_ip_addr, int(args.p)))
+    except:
+        print("A socket error has occured.")
+        return 1
+
+    socket_obj.setblocking(False)
 
     while True:
+        # recieve packet
         try:
             full_packet, (sender_ip, sender_port) = socket_obj.recvfrom(1024)
         except Exception:
@@ -29,10 +52,8 @@ def start(static_forwarding_lookup, queue_size, log):
 
         if full_packet:
             # unpack packet information
-            ip_header = full_packet[:17]
-            ip_header = struct.unpack("!BLHLHI", ip_header)
-            udp_header = full_packet[17:26]
-            udp_header = struct.unpack("!cII", udp_header)
+            header = full_packet[:17]
+            header = struct.unpack("!BLHLHI", ip_header)
             data = full_packet[26:]
 
             priority = ip_header[0]
@@ -54,8 +75,6 @@ def start(static_forwarding_lookup, queue_size, log):
             # elif (packet_type == b'R'):
             #     print(f"[EMULATOR] Recieved REQUEST")
 
-            # get link params
-            link_params = static_forwarding_lookup.get((dst_addr,dst_port))
 
             # not valid address
             if not link_params:
@@ -74,18 +93,6 @@ def start(static_forwarding_lookup, queue_size, log):
                 #add packet to queue
                 else:
                     queue[priority-1].append(full_packet)
-
-        
-        # Process Queue
-
-        # Select packet to process by priority
-        packet = None
-        if(len(queue[0])):
-            packet = queue[0][0]
-        elif(len(queue[1])):
-            packet = queue[1][0]
-        elif(len(queue[2])):
-            packet = queue[2][0]
         
         if packet:
             # get packet info
@@ -130,44 +137,6 @@ def start(static_forwarding_lookup, queue_size, log):
                     # print(f"[EMULATOR] Dropped {packet_type} packet of sequence number {socket.ntohl(seq_num)}")
                 # log last send time for use with rate
                 last_send_time = time.time()
-
-def main():
-    parser = argparse.ArgumentParser(description="gets emulator data")
-
-    parser.add_argument('-p', metavar='port')
-    parser.add_argument('-q', metavar='queue_size')
-    parser.add_argument('-f', metavar='filename')
-    parser.add_argument('-l', metavar='log')
-
-    args = parser.parse_args()
-
-    try:
-        socket_obj.bind((this_ip_addr, int(args.p)))
-    except:
-        print("A socket error has occured.")
-        return 1
-
-    static_forwarding_lookup = {}
-
-    try:
-        static_forwarding_table_file = open(os.path.dirname(__file__) + "/" + str(args.f), "r")
-    except:
-        print("A file error has occurred.")
-        return 1
-
-    matching_host_and_port = (this_host, int(args.p))
-
-    curr_line = static_forwarding_table_file.readline()
-    while len(curr_line) != 0:
-        split_parts = curr_line.split(" ")
-        # check for matching host name and port
-        if((split_parts[0], int(split_parts[1])) == matching_host_and_port):
-            split_parts[-1] = split_parts[-1].strip()
-            # has all the potential destinations of a packet and sees which line matches the packet destination
-            static_forwarding_lookup[(socket.gethostbyname(split_parts[2]), int(split_parts[3]))] = split_parts
-        curr_line = static_forwarding_table_file.readline()
-
-    start(static_forwarding_lookup, int(args.q), args.l)
 
     return 0
 
