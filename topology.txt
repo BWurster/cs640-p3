@@ -1,5 +1,7 @@
-bwurster-XPS-15-7590,5001 bwurster-XPS-15-7590,5002 bwurster-XPS-15-7590,5003
-bwurster-XPS-15-7590,5002 bwurster-XPS-15-7590,5001 bwurster-XPS-15-7590,5003 bwurster-XPS-15-7590,5005
-bwurster-XPS-15-7590,5003 bwurster-XPS-15-7590,5001 bwurster-XPS-15-7590,5002 bwurster-XPS-15-7590,5004
-bwurster-XPS-15-7590,5004 bwurster-XPS-15-7590,5003 bwurster-XPS-15-7590,5005
-bwurster-XPS-15-7590,5005 bwurster-XPS-15-7590,5002 bwurster-XPS-15-7590,5004
+Nihars-MacBook-Air.local,5001 Nihars-MacBook-Air.local,5002 Nihars-MacBook-Air.local,5003
+Nihars-MacBook-Air.local,5002 Nihars-MacBook-Air.local,5001 Nihars-MacBook-Air.local,5003 Nihars-MacBook-Air.local,5005
+Nihars-MacBook-Air.local,5003 Nihars-MacBook-Air.local,5001 Nihars-MacBook-Air.local,5002 Nihars-MacBook-Air.local,5004
+Nihars-MacBook-Air.local,5004 Nihars-MacBook-Air.local,5003 Nihars-MacBook-Air.local,5005
+Nihars-MacBook-Air.local,5005 Nihars-MacBook-Air.local,5002 Nihars-MacBook-Air.local,5004
+
+# these should be ips and not hostnames
