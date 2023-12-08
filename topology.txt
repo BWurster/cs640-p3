@@ -1,7 +1,5 @@
-Nihars-MacBook-Air.local,5001 Nihars-MacBook-Air.local,5002 Nihars-MacBook-Air.local,5003
-Nihars-MacBook-Air.local,5002 Nihars-MacBook-Air.local,5001 Nihars-MacBook-Air.local,5003 Nihars-MacBook-Air.local,5005
-Nihars-MacBook-Air.local,5003 Nihars-MacBook-Air.local,5001 Nihars-MacBook-Air.local,5002 Nihars-MacBook-Air.local,5004
-Nihars-MacBook-Air.local,5004 Nihars-MacBook-Air.local,5003 Nihars-MacBook-Air.local,5005
-Nihars-MacBook-Air.local,5005 Nihars-MacBook-Air.local,5002 Nihars-MacBook-Air.local,5004
-
-# these should be ips and not hostnames
+127.0.1.1,5001 127.0.1.1,5002 127.0.1.1,5003
+127.0.1.1,5002 127.0.1.1,5001 127.0.1.1,5003 127.0.1.1,5005
+127.0.1.1,5003 127.0.1.1,5001 127.0.1.1,5002 127.0.1.1,5004
+127.0.1.1,5004 127.0.1.1,5003 127.0.1.1,5005
+127.0.1.1,5005 127.0.1.1,5002 127.0.1.1,5004
