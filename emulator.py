@@ -35,7 +35,8 @@ def readtopology(topology_file):
 def createroutes():
     return 0
 
-def forwardpacket():
+def forwardpacket(forwarding_table, packet, orig_ip, orig_port):
+
     return 0
 
 def buildForwardTable(route_topology, start_node):
@@ -183,6 +184,8 @@ def main():
     # send hello message every second (should be some random hardcoded value)
     hello_msg_timeout = 1000
 
+    this_next_seq_num = 1
+
     while True:
         # recieve packet
         try:
@@ -191,16 +194,15 @@ def main():
             full_packet = None
 
         if full_packet:
-
             # If it is a helloMessage, your code should...
             if full_packet[0] == b'H':
                 # unpack type, ip, and port
                 header = struct.unpack("!BLH", full_packet)
                 type = header[0]
-                src_ip = header[1]
+                src_ip_num = header[1]
                 src_port = header[2]
 
-                src_ip = socket.inet_ntoa(struct.pack("!L", src_ip))
+                src_ip = socket.inet_ntoa(struct.pack("!L", src_ip_num))
                 # Update the latest timestamp for receiving the helloMessage from the specific neighbor
                 latest_timestamps[str(src_ip + "," + src_port)] = time.time()
 
@@ -213,56 +215,53 @@ def main():
                     forwarding_table = buildForwardTable(route_topology, str(this_ip_addr + "," + args.p))
 
                     # generate and send new link state message to neighbors
-                    # TODO
+                    link_state_gen_msg = struct.pack("!cLHLL", b'L', socket.inet_aton(this_ip_addr), int(args.p), this_next_seq_num, 20)
+                    this_next_seq_num += 1
+                    link_state_gen_msg += struct.pack("!LHL", src_ip_num, src_port, 1)
+                    forwardpacket(forwarding_table, link_state_gen_msg, None, None)
 
             # If it is a LinkStateMessage, your code should...
             elif full_packet[0] == b'L':
                 # unpack base ip, base port, seq num and ttl
-                header_no_neigh = struct.unpack("!LHLL", full_packet[0:14])
+                header_no_neigh = struct.unpack("!LHLL", full_packet[1:15])
                 base_ip = header_no_neigh[0]
                 base_port = header_no_neigh[1]
                 seq_num = header_no_neigh[2]
                 ttl = header_no_neigh[3]
 
                 neighbors = []
-                neighbors_raw = full_packet[14:]
-                num_neighbors = (len(full_packet) - 14) // 10
+                neighbors_raw = full_packet[15:]
+                num_neighbors = (len(full_packet) - 15) // 10
                 for i in range(num_neighbors):
-                    neighbor_struct = full_packet[14*i:14*i+10]
+                    neighbor_struct = full_packet[15*i:15*i+10]
                     neighbor_info = struct.unpack("!LHL", neighbor_struct)
                     neighbors.append(str(neighbor_info[0] + "," + neighbor_info[1]))
 
                 # Check the largest sequence number of the sender node to determine whether it is an old message. If it’s an old message, ignore it. If not in record, add to record.
                 base_id = str(base_ip + "," + base_port)
                 if base_id in largest_seqnumbers:
-                    if seq_num <= largest_seqnumbers[base_id]:
-                        continue # TODO this is concerning
-                    else:
+                    if seq_num > largest_seqnumbers[base_id]:
                         largest_seqnumbers[base_id] = seq_num
+                        # If the topology changes, update the route topology and forwarding table stored in this emulator if needed.
+                        route_topology, hasChanged = check_and_update_topology(route_topology, base_id, neighbors)
+
+                        # need new forwarding table based on this new topology
+                        forwarding_table = buildForwardTable(route_topology)
+
+                        # Call forwardpacket function to make a process of flooding the LinkStateMessage to its own neighbors.
+                        forwardpacket(forwarding_table, full_packet, sender_ip, sender_port)
                 else:
                     largest_seqnumbers[base_id] = seq_num
-
-                # If the topology changes, update the route topology and forwarding table stored in this emulator if needed.
-                route_topology, hasChanged = check_and_update_topology(route_topology, base_id, neighbors)
-
-                # need new forwarding table based on this new topology
-                forwarding_table = buildForwardTable(route_topology)
-
-                # Call forwardpacket function to make a process of flooding the LinkStateMessage to its own neighbors.
-                # forwardpacket()
 
             # If it is a DataPacket / EndPacket / RequestPacket in Lab 2, forward it to the nexthop (figure out the forwarding table to do this).
             elif full_packet[0] == b'R' or full_packet[0] == b'D' or full_packet[0] == b'E':
                 pass
-            # last case (If it is a routetrace packet (described below), refer to the routetrace application part for correct implementation.)
+            # TODO last case (If it is a routetrace packet (described below), refer to the routetrace application part for correct implementation.)
             else:
                 pass
-        # No packets received case
-        else:
-            while (time.time() - hello_msg_time < hello_msg_timeout):
-                # wait until hello message timeout interval has passed
-                pass
-
+        
+        # things to process regardless
+        if (time.time() - hello_msg_time >= hello_msg_timeout):
             # send hello message to all neighbors
             neighs = route_topology[str(this_ip_addr + "," + args.p)]
 
@@ -274,21 +273,26 @@ def main():
             # reset hello message timer
             hello_msg_time = time.time()
 
-            # *** ordering might be wrong ***
-            # Check each neighbor, if helloMessage hasn’t received in time (comparing to the latest timestamp of the received HelloMessage from that neighbor), remove the neighbor from route topology, call the buildForwardTable to rebuild the forward table, and update the send new LinkStateMessage to its neighbors.
-            for timestamp in latest_timestamps:
-                # saying that each neighbor must've received the hello message within 1 second (might be incorrect)
-                if time.time() - timestamp[1] >= hello_msg_timeout:
-                    # remove neighbor from topology
-                    route_topology = change_topology_remove(timestamp[0], route_topology)
+        # Check each neighbor, if helloMessage hasn’t received in time (comparing to the latest timestamp of the received HelloMessage from that neighbor), remove the neighbor from route topology, call the buildForwardTable to rebuild the forward table, and update the send new LinkStateMessage to its neighbors.
+        for key in latest_timestamps:
+            # saying that each neighbor must've received the hello message within 1 second (might be incorrect)
+            if time.time() - latest_timestamps[key] >= 3*hello_msg_timeout:
+                # remove neighbor from topology
+                route_topology = change_topology_remove(key, route_topology)
 
-                    # call the buildForwardTable to rebuild the forward table
-                    forwarding_table = buildForwardTable(route_topology)
+                # call the buildForwardTable to rebuild the forward table
+                forwarding_table = buildForwardTable(route_topology)
 
-                    # update the send new LinkStateMessage to its neighbors
-                    # do later
+                # update the send new LinkStateMessage to its neighbors
+                link_state_gen_msg = struct.pack("!cLHLL", b'L', this_ip_addr, int(args.p), this_next_seq_num, 20)
+                this_next_seq_num += 1
+                for neighbor in route_topology[str(this_ip_addr + "," + args.p)]:
+                    neighbor_ip = socket.inet_aton(neighbor.split(",")[0])
+                    neighbor_port = int(neighbor.split(",")[1])
+                    link_state_gen_msg += struct.pack("!LHL", src_ip, src_port, 1)
+                forwardpacket(forwarding_table, link_state_gen_msg, None, None)
 
-            # Send the newest LinkStateMessage to all neighbors if the defined intervals have passed.
+        # Send the newest LinkStateMessage to all neighbors if the defined intervals have passed.
 
     return 0
 
