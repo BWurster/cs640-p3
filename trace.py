@@ -56,6 +56,9 @@ def main():
                                 int(destination_port))
         socket_obj.sendto(rt_packet, (src_ip, int(source_port)))
 
+        if debug_option == "1":
+            print(f"[   SENT   ] TTL={live_ttl} SRC={this_ip_addr}:{routetrace_port} DST={dst_ip}:{destination_port}")
+
         # wait for packet to come back
         full_packet, (sender_ip, sender_port) = socket_obj.recvfrom(1024)
 
@@ -71,6 +74,9 @@ def main():
 
         src_id = f"{rt_src_ip},{rt_src_port}"
         dst_id = f"{rt_dst_ip},{rt_dst_port}"
+
+        if debug_option == "1":
+            print(f"[ RECEIVED ] TTL={ttl_in} SRC={rt_src_ip}:{rt_src_port} DST={rt_dst_ip}:{rt_dst_port}")
 
         print(src_id)
 

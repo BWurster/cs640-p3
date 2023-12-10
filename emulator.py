@@ -16,7 +16,6 @@ this_host = socket.gethostname()
 this_ip_addr = socket.gethostbyname(this_host)
 
 def readtopology(topology_file):
-
     route_topology = {}
 
     curr_line = topology_file.readline()
@@ -94,6 +93,7 @@ def createroutes(route_topology, forwarding_table, this_port):
                 # Check the route topology stored in this emulator. If the sender of helloMessage is from a previously unavailable node, change the route topology and forwarding table stored in this emulator. Then generate and send a new LinkStateMessage to its neighbors.
                 if f"{src_ip},{src_port}" not in route_topology:
                     # update route topology by using initial topology to help reconstruct the routes
+                    print("1", this_ip_addr, src_ip)
                     route_topology = change_topology_add(route_topology, this_ip_addr, this_port, src_ip, src_port)
 
                     # need new forwarding table based on this new topology
@@ -114,16 +114,17 @@ def createroutes(route_topology, forwarding_table, this_port):
             elif full_packet[0] == ord('L'):
                 # unpack base ip, base port, seq num and ttl
                 header_no_neigh = struct.unpack("!LHLL", full_packet[1:15])
-                base_ip = header_no_neigh[0]
+                base_ip_num = header_no_neigh[0]
                 base_port = header_no_neigh[1]
                 seq_num = header_no_neigh[2]
                 ttl = header_no_neigh[3]
 
+                base_ip = socket.inet_ntoa(struct.pack("!L", base_ip_num))
+
                 neighbors = []
-                neighbors_raw = full_packet[15:]
                 num_neighbors = (len(full_packet) - 15) // 10
                 for i in range(num_neighbors):
-                    neighbor_struct = full_packet[15*i:15*i+10]
+                    neighbor_struct = full_packet[(10*i+15):(10*i+25)]
                     neighbor_info = struct.unpack("!LHL", neighbor_struct)
                     neighbors.append(f"{socket.inet_ntoa(struct.pack('!L', neighbor_info[0]))},{neighbor_info[1]}")
 
@@ -133,7 +134,7 @@ def createroutes(route_topology, forwarding_table, this_port):
                     if seq_num > largest_seqnumbers[base_id]:
                         largest_seqnumbers[base_id] = seq_num
                         # If the topology changes, update the route topology and forwarding table stored in this emulator if needed.
-                        route_topology, hasChanged = check_and_update_topology(route_topology, base_id, neighbors)
+                        route_topology, hasChanged = check_and_update_topology(route_topology, base_id, neighbors, f"{this_ip_addr},{this_port}")
 
                         if hasChanged:
                             # need new forwarding table based on this new topology
@@ -174,7 +175,7 @@ def createroutes(route_topology, forwarding_table, this_port):
             # saying that each neighbor must've received the hello message within 1 second (might be incorrect)
             if time.time() - latest_timestamps[key] >= 3*hello_msg_timeout:
                 # remove neighbor from topology
-                route_topology = change_topology_remove(route_topology, key)
+                route_topology = change_topology_remove(route_topology, key, f"{this_ip_addr},{this_port}")
 
                 # call the buildForwardTable to rebuild the forward table
                 forwarding_table = buildForwardTable(route_topology, f"{this_ip_addr},{this_port}")
@@ -196,6 +197,7 @@ def createroutes(route_topology, forwarding_table, this_port):
                 forwardpacket(route_topology, forwarding_table, link_state_gen_msg, None, None, this_port)
 
         # Send the newest LinkStateMessage to all neighbors if the defined intervals have passed.
+        # TODO
     
     return 0 # will not be reached because createroutes has infinite loop
 
@@ -330,7 +332,7 @@ def change_topology_add(route_topology, base_ip, base_port, new_ip, new_port):
 
     return route_topology
 
-def change_topology_remove(route_topology, node_to_remove):
+def change_topology_remove(route_topology, node_to_remove, this_id):
     # removing the node from each node's list of neighbors if it contains it
     for node in route_topology:
         if node_to_remove in route_topology[node]:
@@ -340,9 +342,19 @@ def change_topology_remove(route_topology, node_to_remove):
     if node_to_remove in route_topology:
         del route_topology[node_to_remove]
 
+    # handle disjoint graph cleanup
+    route_topology = clean_route_topology({}, route_topology, this_id)
+
     return route_topology
 
-def check_and_update_topology(route_topology, base_id, neighbors):
+def clean_route_topology(route_topology, old_route_topology, item_to_add):
+    route_topology[item_to_add] = old_route_topology[item_to_add]
+    for item in route_topology[item_to_add]:
+        if not item in route_topology:
+            route_topology = clean_route_topology(route_topology, old_route_topology, item)
+    return route_topology
+
+def check_and_update_topology(route_topology, base_id, neighbors, this_id):
     hasChanged = False
 
     if base_id in route_topology:
@@ -353,7 +365,7 @@ def check_and_update_topology(route_topology, base_id, neighbors):
                 route_topology = link_nodes(route_topology, neighbor, base_id)
             # items in topology not in neighbors (lost neighbors)
             for neighbor in [neighbor for neighbor in route_topology[base_id] if neighbor not in neighbors]:
-                route_topology = change_topology_remove(route_topology, neighbor)
+                route_topology = change_topology_remove(route_topology, neighbor, this_id)
             # update base_id neighbors
             route_topology[base_id] = neighbors
     else:
