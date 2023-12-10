@@ -68,7 +68,7 @@ def createroutes(route_topology, forwarding_table, this_port):
     hello_msg_timeout = 1
 
     lsm_time = time.time()
-    lsm_timeout = 1
+    lsm_timeout = 3
 
     this_next_seq_num = 1
 
@@ -96,7 +96,6 @@ def createroutes(route_topology, forwarding_table, this_port):
                 # Check the route topology stored in this emulator. If the sender of helloMessage is from a previously unavailable node, change the route topology and forwarding table stored in this emulator. Then generate and send a new LinkStateMessage to its neighbors.
                 if f"{src_ip},{src_port}" not in route_topology:
                     # update route topology by using initial topology to help reconstruct the routes
-                    print("1", this_ip_addr, src_ip)
                     route_topology = change_topology_add(route_topology, this_ip_addr, this_port, src_ip, src_port)
 
                     # need new forwarding table based on this new topology
@@ -154,8 +153,7 @@ def createroutes(route_topology, forwarding_table, this_port):
             # If it is a DataPacket / EndPacket / RequestPacket in Lab 2, forward it to the nexthop (figure out the forwarding table to do this).
             elif full_packet[0] == ord('T') or full_packet[0] == ord('R') or full_packet[0] == ord('D') or full_packet[0] == ord('E'):
                 forwardpacket(route_topology, forwarding_table, full_packet, None, None, this_port)
-            else:
-                pass
+        
         
         # things to process regardless
         if (time.time() - hello_msg_time >= hello_msg_timeout):
@@ -195,7 +193,7 @@ def createroutes(route_topology, forwarding_table, this_port):
                     neighbor_port = int(neighbor.split(",")[1])
                     link_state_gen_msg += struct.pack("!LHL", neighbor_ip, neighbor_port, 1)
                 forwardpacket(route_topology, forwarding_table, link_state_gen_msg, None, None, this_port)
-
+        
         # Send the newest LinkStateMessage to all neighbors if the defined intervals have passed.
         if (time.time() - lsm_time >= lsm_timeout):
             # update the send new LinkStateMessage to its neighbors
@@ -207,7 +205,7 @@ def createroutes(route_topology, forwarding_table, this_port):
                 link_state_gen_msg += struct.pack("!LHL", neighbor_ip, neighbor_port, 1)
             forwardpacket(route_topology, forwarding_table, link_state_gen_msg, None, None, this_port)
             lsm_time = time.time()
-
+            print("sent LSM:", f"{this_ip_addr},{this_port}", route_topology[f"{this_ip_addr},{this_port}"])
     
     return 0 # will not be reached because createroutes has infinite loop
 
@@ -323,16 +321,6 @@ def link_nodes(route_topology, id_1, id_2):
 
     return route_topology
     
-def unlink_nodes(route_topology, id_1, id_2):
-    if id_1 in route_topology:
-        if id_2 in route_topology[id_1]:
-            route_topology[id_1].remove(id_2)
-
-    if id_2 in route_topology:
-        if id_1 in route_topology[id_2]:
-            route_topology[id_2].remove(id_1)
-
-    return route_topology
 
 def change_topology_add(route_topology, base_ip, base_port, new_ip, new_port):
     base_id = f"{base_ip},{base_port}"
@@ -366,7 +354,7 @@ def clean_route_topology(route_topology, old_route_topology, item_to_add):
 
 def check_and_update_topology(route_topology, base_id, neighbors, this_id):
     hasChanged = False
-
+    print("vroom", route_topology)
     if base_id in route_topology:
         if not sorted(neighbors) == sorted(route_topology[base_id]):
             hasChanged = True
@@ -383,7 +371,7 @@ def check_and_update_topology(route_topology, base_id, neighbors, this_id):
         for neighbor in neighbors:
             link_nodes(route_topology, neighbor, base_id)
         hasChanged = True
-
+    print("skrt", route_topology)
     return (route_topology, hasChanged)
 
 
