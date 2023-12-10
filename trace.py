@@ -84,6 +84,9 @@ def main():
             break
 
         live_ttl += 1
+
+        if live_ttl > 30:
+            break
     
 
 
