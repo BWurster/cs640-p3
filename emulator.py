@@ -67,6 +67,9 @@ def createroutes(route_topology, forwarding_table, this_port):
     # send hello message every second (should be some random hardcoded value)
     hello_msg_timeout = 1
 
+    lsm_time = time.time()
+    lsm_timeout = 1
+
     this_next_seq_num = 1
 
     while True:
@@ -100,7 +103,6 @@ def createroutes(route_topology, forwarding_table, this_port):
                     forwarding_table = buildForwardTable(route_topology, f"{this_ip_addr},{this_port}")
 
                     # print changes
-                    print("REMOVE 3")
                     print_topology(route_topology)
                     print_forwarding_table(forwarding_table)
 
@@ -141,7 +143,6 @@ def createroutes(route_topology, forwarding_table, this_port):
                             forwarding_table = buildForwardTable(route_topology, f"{this_ip_addr},{this_port}")
 
                             # print changes
-                            print("REMOVE 2")
                             print_topology(route_topology)
                             print_forwarding_table(forwarding_table)
 
@@ -183,7 +184,6 @@ def createroutes(route_topology, forwarding_table, this_port):
                 del latest_timestamps[key] # remove from timestamp tracking (no longer exists)
 
                 # print changes
-                print("REMOVE 1")
                 print_topology(route_topology)
                 print_forwarding_table(forwarding_table)
 
@@ -197,7 +197,17 @@ def createroutes(route_topology, forwarding_table, this_port):
                 forwardpacket(route_topology, forwarding_table, link_state_gen_msg, None, None, this_port)
 
         # Send the newest LinkStateMessage to all neighbors if the defined intervals have passed.
-        # TODO
+        if (time.time() - lsm_time >= lsm_timeout):
+            # update the send new LinkStateMessage to its neighbors
+            link_state_gen_msg = struct.pack("!cLHLL", b'L', struct.unpack("!L", socket.inet_aton(this_ip_addr))[0], int(this_port), this_next_seq_num, 20)
+            this_next_seq_num += 1
+            for neighbor in route_topology[f"{this_ip_addr},{this_port}"]:
+                neighbor_ip = struct.unpack("!L", socket.inet_aton(neighbor.split(",")[0]))[0]
+                neighbor_port = int(neighbor.split(",")[1])
+                link_state_gen_msg += struct.pack("!LHL", neighbor_ip, neighbor_port, 1)
+            forwardpacket(route_topology, forwarding_table, link_state_gen_msg, None, None, this_port)
+            lsm_time = time.time()
+
     
     return 0 # will not be reached because createroutes has infinite loop
 
