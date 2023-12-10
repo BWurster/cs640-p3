@@ -63,12 +63,12 @@ def createroutes(route_topology, forwarding_table, this_port):
     socket_obj.setblocking(False)
 
     hello_msg_time = time.time()
-
-    # send hello message every second (should be some random hardcoded value)
-    hello_msg_timeout = 1
+    hello_msg_timeout = 0.2
 
     lsm_time = time.time()
-    lsm_timeout = 3
+    lsm_timeout = 0.2
+
+    node_death_timeout = 2
 
     this_next_seq_num = 1
 
@@ -94,7 +94,7 @@ def createroutes(route_topology, forwarding_table, this_port):
                 latest_timestamps[f"{src_ip},{src_port}"] = time.time()
 
                 # Check the route topology stored in this emulator. If the sender of helloMessage is from a previously unavailable node, change the route topology and forwarding table stored in this emulator. Then generate and send a new LinkStateMessage to its neighbors.
-                if f"{src_ip},{src_port}" not in route_topology:
+                if not f"{src_ip},{src_port}" in route_topology or not f"{src_ip},{src_port}" in route_topology[f"{this_ip_addr},{this_port}"]:
                     # update route topology by using initial topology to help reconstruct the routes
                     route_topology = change_topology_add(route_topology, this_ip_addr, this_port, src_ip, src_port)
 
@@ -172,9 +172,10 @@ def createroutes(route_topology, forwarding_table, this_port):
         keys = list(latest_timestamps.keys()).copy()
         for key in keys:
             # saying that each neighbor must've received the hello message within 1 second (might be incorrect)
-            if time.time() - latest_timestamps[key] >= 3*hello_msg_timeout:
+            if time.time() - latest_timestamps[key] >= node_death_timeout:
+                print(key, "timeout")
                 # remove neighbor from topology
-                route_topology = change_topology_remove(route_topology, key, f"{this_ip_addr},{this_port}")
+                route_topology = unlink_nodes(route_topology, key, f"{this_ip_addr},{this_port}", f"{this_ip_addr},{this_port}")
 
                 # call the buildForwardTable to rebuild the forward table
                 forwarding_table = buildForwardTable(route_topology, f"{this_ip_addr},{this_port}")
@@ -205,7 +206,6 @@ def createroutes(route_topology, forwarding_table, this_port):
                 link_state_gen_msg += struct.pack("!LHL", neighbor_ip, neighbor_port, 1)
             forwardpacket(route_topology, forwarding_table, link_state_gen_msg, None, None, this_port)
             lsm_time = time.time()
-            print("sent LSM:", f"{this_ip_addr},{this_port}", route_topology[f"{this_ip_addr},{this_port}"])
     
     return 0 # will not be reached because createroutes has infinite loop
 
@@ -330,20 +330,42 @@ def change_topology_add(route_topology, base_ip, base_port, new_ip, new_port):
 
     return route_topology
 
-def change_topology_remove(route_topology, node_to_remove, this_id):
-    # removing the node from each node's list of neighbors if it contains it
-    for node in route_topology:
-        if node_to_remove in route_topology[node]:
-            route_topology[node].remove(node_to_remove)
+def unlink_nodes(route_topology, id_1, id_2, this_id):
+    print_topology(route_topology)
+    print("disconnecting", id_1, id_2)
+    
+    if id_1 in route_topology:
+        if id_2 in route_topology[id_1]:
+            route_topology[id_1].remove(id_2)
+    if id_2 in route_topology:
+        if id_1 in route_topology[id_2]:
+            route_topology[id_2].remove(id_1)
 
-    # remove whole key for that node if it exists
-    if node_to_remove in route_topology:
-        del route_topology[node_to_remove]
+    print_topology(route_topology)
+    print("cleaning")
 
     # handle disjoint graph cleanup
     route_topology = clean_route_topology({}, route_topology, this_id)
 
+    print_topology(route_topology)
+
     return route_topology
+
+# def change_topology_remove(route_topology, node_to_remove, this_id):
+#     if(node_to_remove != this_id):
+#         # removing the node from each node's list of neighbors if it contains it
+#         for node in route_topology:
+#             if node_to_remove in route_topology[node]:
+#                 route_topology[node].remove(node_to_remove)
+
+#         # remove whole key for that node if it exists
+#         if node_to_remove in route_topology:
+#             del route_topology[node_to_remove]
+
+#         # handle disjoint graph cleanup
+#         route_topology = clean_route_topology({}, route_topology, this_id)
+
+#     return route_topology
 
 def clean_route_topology(route_topology, old_route_topology, item_to_add):
     route_topology[item_to_add] = old_route_topology[item_to_add]
@@ -354,24 +376,27 @@ def clean_route_topology(route_topology, old_route_topology, item_to_add):
 
 def check_and_update_topology(route_topology, base_id, neighbors, this_id):
     hasChanged = False
-    print("vroom", route_topology)
     if base_id in route_topology:
         if not sorted(neighbors) == sorted(route_topology[base_id]):
-            hasChanged = True
-            # items in neighbors not in topology (new neighbors)
-            for neighbor in [neighbor for neighbor in neighbors if neighbor not in route_topology[base_id]]:
-                route_topology = link_nodes(route_topology, neighbor, base_id)
-            # items in topology not in neighbors (lost neighbors)
-            for neighbor in [neighbor for neighbor in route_topology[base_id] if neighbor not in neighbors]:
-                route_topology = change_topology_remove(route_topology, neighbor, this_id)
-            # update base_id neighbors
+            # # items in neighbors not in topology (new neighbors)
+            # for neighbor in [neighbor for neighbor in neighbors if neighbor not in route_topology[base_id]]:
+            #     route_topology = link_nodes(route_topology, neighbor, base_id)
+            # # items in topology not in neighbors (lost neighbors)
+            # for neighbor in [neighbor for neighbor in route_topology[base_id] if neighbor not in neighbors]:
+            #     # route_topology = change_topology_remove(route_topology, neighbor, this_id)
+            #     route_topology = unlink_nodes(route_topology, base_id, neighbor, this_id)
+            # # update base_id neighbors
             route_topology[base_id] = neighbors
+            for neighbor in neighbors:
+                link_nodes(route_topology, neighbor, base_id)
+            hasChanged = True
+            route_topology = clean_route_topology({}, route_topology, this_id)
     else:
         route_topology[base_id] = neighbors
         for neighbor in neighbors:
             link_nodes(route_topology, neighbor, base_id)
         hasChanged = True
-    print("skrt", route_topology)
+        route_topology = clean_route_topology({}, route_topology, this_id)
     return (route_topology, hasChanged)
 
 
