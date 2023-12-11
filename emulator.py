@@ -157,9 +157,9 @@ def createroutes(route_topology, forwarding_table, this_port):
                         print_topology(route_topology)
                         print_forwarding_table(forwarding_table)
 
-                        # Call forwardpacket function to make a process of flooding the LinkStateMessage to its own neighbors.
-                        # print("forward 2")
-                        forwardpacket(route_topology, forwarding_table, full_packet, sender_ip, sender_port, this_port)
+                    # Call forwardpacket function to make a process of flooding the LinkStateMessage to its own neighbors.
+                    # print("forward 2")
+                    forwardpacket(route_topology, forwarding_table, full_packet, sender_ip, sender_port, this_port)
 
             # If it is a DataPacket / EndPacket / RequestPacket in Lab 2, forward it to the nexthop (figure out the forwarding table to do this).
             elif full_packet[0] == ord('T') or full_packet[0] == ord('R') or full_packet[0] == ord('D') or full_packet[0] == ord('E'):
